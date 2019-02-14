@@ -16,23 +16,26 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.SerialPort;
 import edu.wpi.first.wpilibj.SerialPort.Port;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
-import edu.wpi.first.wpilibj.AnalogGyro;
-import edu.wpi.first.wpilibj.RobotDrive;
-import edu.wpi.first.wpilibj.SampleRobot;
-
+import edu.wpi.first.wpilibj.Solenoid;
+//import edu.wpi.first.wpilibj.Compressor;
+//import edu.wpi.first.wpilibj.Encoder;
+//import edu.wpi.first.wpilibj.AnalogInput;
+//import edu.wpi.first.wpilibj.Counter;
+//import edu.wpi.first.wpilibj.Ultrasonic;
 
 public class Robot extends TimedRobot {
-
-  private static final int kJoystickPort = 0;
 
   private WPI_TalonSRX leftDrive; //fl
   private WPI_TalonSRX leftSlave; //bl
   private WPI_TalonSRX rightDrive; //fr
   private WPI_TalonSRX rightSlave; //br
   private DifferentialDrive m_drive;
-
+   
   private WPI_TalonSRX intake;
 
+  private WPI_TalonSRX lifter;
+  private WPI_TalonSRX lifterslave;
+ 
   private Joystick m_joystick;
 
   private int[] ball = new int[4];
@@ -40,9 +43,30 @@ public class Robot extends TimedRobot {
   private int[] panel2 = new int[4];
   private int center = 159;
 
+  
+ //AnalogInput analoginput = new AnalogInput(0);
+  
   private final Timer m_timer = new Timer();
   SerialPort spi;
+
+ // private Compressor compressor;
+
+  private Solenoid s0;
+  private Solenoid s1;
+  private Solenoid s2;
+  private Solenoid s3;
+  private Solenoid s4;
+  private Solenoid s5;
+  private boolean prevState5 = false;
+  private boolean prevState6 = false;
+  private boolean prevState7 = false;
+  private boolean prevState8 = false;
   
+  private boolean hatchToggle = false;
+  private boolean intakeToggle = false;
+  private boolean ballPusher = false;
+  private boolean driverInverse = false;
+ 
 
   @Override
   public void robotInit() {
@@ -57,27 +81,55 @@ public class Robot extends TimedRobot {
 
     intake = new WPI_TalonSRX(6);
 
-    m_drive = new DifferentialDrive(rightDrive, leftDrive);
-    m_joystick = new Joystick(kJoystickPort);
-    //CameraServer.getInstance().startAutomaticCapture(0);
+    lifter = new WPI_TalonSRX(7);
+     lifterslave = new WPI_TalonSRX(8);
+    lifterslave.follow(lifter);
 
+    s0 = new Solenoid(1);
+    s1 = new Solenoid(2);
+    s2 = new Solenoid(3);
+    s3 = new Solenoid(4);
+    s4 = new Solenoid(5);
+    s5 = new Solenoid(6);
+
+    m_drive = new DifferentialDrive(rightDrive, leftDrive);
+    m_joystick = new Joystick(0);
+    CameraServer.getInstance().startAutomaticCapture(0);
+    spi = new SerialPort(115200, Port.kUSB1);
+    spi.enableTermination();
+    CameraServer.getInstance().startAutomaticCapture(0);
   }
 
   @Override
   public void teleopInit() {
-    //spi = new SerialPort(115200, Port.kUSB1);
-    //spi.enableTermination();
     m_timer.reset();
     m_timer.start();
+    //encoderMotor1.setDistancePerPulse(10);
+    //encoderMotor1.reset();
   }
 
   @Override
   public void teleopPeriodic() {
-    //String s = spi.readString();
-    //pixyData(s);
-    //if(s!="")
-      //SmartDashboard.putString("value", s);
-    m_drive.arcadeDrive(-m_joystick.getY(), m_joystick.getZ());
+    String s = spi.readString();
+    pixyData(s);
+    if(s!="")
+      SmartDashboard.putString("value", s);
+    //double sliderPos = (m_joystick.getRawAxis(9) + 1)*3/2; //range from 0-3
+
+    //if(sliderPos<= 1){}
+  
+    if(m_joystick.getRawButton(8) && !prevState8){
+      driverInverse = !driverInverse;
+    }
+    prevState8 = m_joystick.getRawButton(8);
+
+    if(driverInverse) {
+      m_drive.arcadeDrive(-m_joystick.getY(), m_joystick.getZ());
+    }
+    else {
+      m_drive.arcadeDrive(m_joystick.getY(), m_joystick.getZ());
+    }
+        
     if(m_joystick.getRawButton(1)) {
       intake.set(0.5);
     }
@@ -91,38 +143,64 @@ public class Robot extends TimedRobot {
     /*if(m_joystick.getRawButtonPressed(1)) {
       hatchPlace();
     }*/
-  }
-  public void autonomousInit() {
-    spi = new SerialPort(115200, Port.kUSB1);
-    spi.enableTermination();
-    m_drive.setSafetyEnabled(true);
-  }
-  public void autonomousPeriodic() {
-    String s = spi.readString();
-    SmartDashboard.putString("value", s);
-    pixyData(s);
-    //m_drive.arcadeDrive(0,0);
-    SmartDashboard.putNumber("x", ball[0]-165);
-    //was 159
-    SmartDashboard.putNumber("x corrected", ball[0]-center);
-    double turn;
-    double drive = 0;
-    if(ball[0]-center<-7) {
-      turn = -0.5;
-      if(ball[0]-center>-20)
-        turn = -0.45;
+    if(m_joystick.getRawButton(3)) {
+      lifter.set(1);
     }
-    else if(ball[0]-center>7) {
-      turn = 0.5;
-      if(ball[0]-159<20)
-        turn = 0.45;
+    else if(m_joystick.getRawButton(4)) {
+      lifter.set(-1);
     }
     else {
-      turn = 0;
-      drive = 0.5;
+      lifter.set(0);
     }
-    m_drive.arcadeDrive(drive,turn);
+    
+
+    if(m_joystick.getRawButton(5) && !prevState5){
+      hatchToggle = !hatchToggle;
+      if(hatchToggle) {
+        s3.set(true);
+        s1.set(true);
+        s2.set(true);
+      }
+      else {
+        s3.set(false);
+        s1.set(false);
+        s2.set(false);
+      }
+    }
+    prevState5 = m_joystick.getRawButton(5);
+
+    
+    if(m_joystick.getRawButton(6) && !prevState6){
+      intakeToggle = !intakeToggle;
+      if(intakeToggle) {
+        s0.set(true);  
+      }
+      else {
+        s0.set(false);    
+      }
+    }
+    prevState6 = m_joystick.getRawButton(6);
+
+    if(m_joystick.getRawButton(7) && !prevState7){
+      ballPusher = !ballPusher;
+      if(ballPusher) {
+        s4.set(true);  
+      }
+      else {
+        s4.set(false);    
+      }
+    }
+    prevState7 = m_joystick.getRawButton(7);
   }
+
+  public void autonomousInit() {
+    m_drive.setSafetyEnabled(true);
+  }
+
+  public void autonomousPeriodic() {
+    
+  }
+
   public void pixyData(String s){
     SmartDashboard.putNumber("length", s.length());
     if(!s.isEmpty() && s.length()==23 && s.charAt(0)=='P') {
@@ -136,10 +214,6 @@ public class Robot extends TimedRobot {
       int width = Integer.valueOf(s.substring(13, 16));
       int height = Integer.valueOf(s.substring(17,20));
       int sigNum = Integer.valueOf(s.substring(21,22));
-      /*int x = Integer.valueOf(s.substring(s.indexOf("X")+1,s.indexOf("Y")));
-      int y = Integer.valueOf(s.substring(s.indexOf("Y")+1,s.indexOf("W")));
-      int width = Integer.valueOf(s.substring(s.indexOf("W")+1,s.indexOf("H")));
-      int height = Integer.valueOf(s.substring(s.indexOf("H")+1,s.indexOf("\n")));*/
 
       if(sig==1) {
         ball[0] = x;
@@ -166,7 +240,6 @@ public class Robot extends TimedRobot {
           panel2 = temp.clone();
         }*/
       }
-
     }
   }
   public void hatchPlace() {
@@ -213,7 +286,7 @@ public class Robot extends TimedRobot {
         turn = -0.5;
       }
       m_drive.arcadeDrive(turn, 0);
-      if(m_timer.get()-start>2.5|| m_joystick.getRawButtonPressed(8)) {
+      if(m_timer.get()-start>2.5 || m_joystick.getRawButtonPressed(8)) {
         return;
       }
     }
