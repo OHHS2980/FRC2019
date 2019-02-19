@@ -39,11 +39,16 @@ public class Robot extends TimedRobot {
   private Joystick m_joystick;
 
   private int[] ball = new int[4];
-  private int[] panel1 = new int[4];
-  private int[] panel2 = new int[4];
+  private int[] cargoPanel1 = new int[4];
+  private int[] cargoPanel2 = new int[4];
+
+  private int[] hatchPanel1 = new int[4];
+  private int[] hatchPanel2 = new int[4];
+
   private int center = 159;
 
-  
+  private int lifterPos = 0;
+
  //AnalogInput analoginput = new AnalogInput(0);
   
   private final Timer m_timer = new Timer();
@@ -57,17 +62,27 @@ public class Robot extends TimedRobot {
   private Solenoid s3;
   private Solenoid s4;
   private Solenoid s5;
-  private boolean prevState5 = false;
-  private boolean prevState6 = false;
-  private boolean prevState7 = false;
-  private boolean prevState8 = false;
+
+  private double prevSlider = 0;
   
   private boolean hatchToggle = false;
   private boolean intakeToggle = false;
   private boolean ballPusher = false;
   private boolean driverInverse = false;
  
+  private double sliderPos = 0;
+  private int prevSliderLv = 0;
 
+  private String lastChanged = "button";
+ 
+  private double homeHeight = 10;
+  private double liftLimit = 300;
+  private double ballHeight1 = 76;
+  private double ballHeight2 = 142;
+  private double ballHeight3 = 198;
+  private double panelHeight1 = 53;
+  private double panelHeight2 = 124;
+  private double panelHeight3 = 193;
   @Override
   public void robotInit() {
     leftDrive = new WPI_TalonSRX(2); //fl
@@ -85,19 +100,18 @@ public class Robot extends TimedRobot {
      lifterslave = new WPI_TalonSRX(8);
     lifterslave.follow(lifter);
 
-    s0 = new Solenoid(1);
-    s1 = new Solenoid(2);
-    s2 = new Solenoid(3);
-    s3 = new Solenoid(4);
+    s0 = new Solenoid(0);
+    s1 = new Solenoid(1);
+    s2 = new Solenoid(2);
+    s3 = new Solenoid(3);
     s4 = new Solenoid(5);
     s5 = new Solenoid(6);
 
     m_drive = new DifferentialDrive(rightDrive, leftDrive);
     m_joystick = new Joystick(0);
-    CameraServer.getInstance().startAutomaticCapture(0);
-    spi = new SerialPort(115200, Port.kUSB1);
+    CameraServer.getInstance().startAutomaticCapture(); //bottom port
+    spi = new SerialPort(115200, Port.kUSB1); //top port
     spi.enableTermination();
-    CameraServer.getInstance().startAutomaticCapture(0);
   }
 
   @Override
@@ -112,16 +126,12 @@ public class Robot extends TimedRobot {
   public void teleopPeriodic() {
     String s = spi.readString();
     pixyData(s);
-    if(s!="")
+    if(!s.isEmpty())
       SmartDashboard.putString("value", s);
-    //double sliderPos = (m_joystick.getRawAxis(9) + 1)*3/2; //range from 0-3
-
-    //if(sliderPos<= 1){}
-  
-    if(m_joystick.getRawButton(8) && !prevState8){
+    
+    if(m_joystick.getRawButtonPressed(4)){
       driverInverse = !driverInverse;
     }
-    prevState8 = m_joystick.getRawButton(8);
 
     if(driverInverse) {
       m_drive.arcadeDrive(-m_joystick.getY(), m_joystick.getZ());
@@ -130,47 +140,52 @@ public class Robot extends TimedRobot {
       m_drive.arcadeDrive(m_joystick.getY(), m_joystick.getZ());
     }
         
-    if(m_joystick.getRawButton(1)) {
-      intake.set(0.5);
+    sliderPos = (-m_joystick.getRawAxis(5) + 1)*2; //range from 0-4
+    SmartDashboard.putNumber("SliderPos", sliderPos);
+    checkLifterChanged();
+
+    if(m_joystick.getRawButton(2)) {
+      intake.set(1);
     }
-    else if(m_joystick.getRawButton(2)) {
-      intake.set(-.5);
+    else if(m_joystick.getRawButton(7)) {
+      intake.set(-1);
     }
     else {
       intake.set(0);
     }
-    //second one was getX
-    /*if(m_joystick.getRawButtonPressed(1)) {
-      hatchPlace();
-    }*/
-    if(m_joystick.getRawButton(3)) {
-      lifter.set(1);
+
+    //changeLifterLevel();
+    
+    if(lifterPos>liftLimit) {
+      lifter.set(0);
     }
-    else if(m_joystick.getRawButton(4)) {
-      lifter.set(-1);
+    else if(m_joystick.getRawButton(1)) {//lifter down
+      lifter.set(-0.35);
+      lastChanged = "button";
     }
-    else {
+    else if(m_joystick.getRawButton(5)) { //lift UP
+      lifter.set(0.65);
+      lastChanged = "button";
+    }
+    else if(lastChanged.equals("button")) {
       lifter.set(0);
     }
     
-
-    if(m_joystick.getRawButton(5) && !prevState5){
+    if(m_joystick.getRawButtonPressed(3)){
       hatchToggle = !hatchToggle;
       if(hatchToggle) {
-        s3.set(true);
         s1.set(true);
         s2.set(true);
+        s3.set(true);
       }
       else {
-        s3.set(false);
         s1.set(false);
         s2.set(false);
+        s3.set(false);
       }
     }
-    prevState5 = m_joystick.getRawButton(5);
-
     
-    if(m_joystick.getRawButton(6) && !prevState6){
+    if(m_joystick.getRawButtonPressed(8)){
       intakeToggle = !intakeToggle;
       if(intakeToggle) {
         s0.set(true);  
@@ -179,9 +194,8 @@ public class Robot extends TimedRobot {
         s0.set(false);    
       }
     }
-    prevState6 = m_joystick.getRawButton(6);
 
-    if(m_joystick.getRawButton(7) && !prevState7){
+    if(m_joystick.getRawButtonPressed(6)){
       ballPusher = !ballPusher;
       if(ballPusher) {
         s4.set(true);  
@@ -190,55 +204,75 @@ public class Robot extends TimedRobot {
         s4.set(false);    
       }
     }
-    prevState7 = m_joystick.getRawButton(7);
-  }
-
-  public void autonomousInit() {
-    m_drive.setSafetyEnabled(true);
-  }
-
-  public void autonomousPeriodic() {
-    
+    if(driverInverse)
+      SmartDashboard.putString("Mode", "Cargo");
+    else  
+      SmartDashboard.putString("Mode", "Hatch");
   }
 
   public void pixyData(String s){
     SmartDashboard.putNumber("length", s.length());
-    if(!s.isEmpty() && s.length()==23 && s.charAt(0)=='P') {
+    //format D:000
+    if(!s.isEmpty() && s.length()==6 && s.charAt(0)=='D') {
+      lifterPos = Integer.valueOf(s.substring(2,5));
+      SmartDashboard.putNumber("Lifter Position (cm)", lifterPos);
+    }
+    else if(!s.isEmpty() && s.length()==23 && s.charAt(0)=='P') {
       SmartDashboard.putString("parsed", s);
       int sig = Character.getNumericValue(s.charAt(3));
 
       //format "P1S0X000Y000W000H000N0\n"
       //        0123456789012345678901
+      int pixyNum = Integer.valueOf(s.substring(1,2));
       int x = Integer.valueOf(s.substring(5,8));
       int y = Integer.valueOf(s.substring(9,12));
       int width = Integer.valueOf(s.substring(13, 16));
       int height = Integer.valueOf(s.substring(17,20));
       int sigNum = Integer.valueOf(s.substring(21,22));
 
-      if(sig==1) {
+      if(sig==1&&pixyNum==2) {
         ball[0] = x;
         ball[1] = y;
         ball[2] = width;
         ball[3] = height;
       }
-      else if(sig==2) {
+      else if(sig==2&&pixyNum==2) {
         if(sigNum==0) {
-          panel1[0] = x;
-          panel1[1] = y;
-          panel1[2] = width;
-          panel1[3] = height;
+          cargoPanel1[0] = x;
+          cargoPanel1[1] = y;
+          cargoPanel1[2] = width;
+          cargoPanel1[3] = height;
         }
         else if(sigNum==1) {
-          panel2[0] = x;
-          panel2[1] = y;
-          panel2[2] = width;
-          panel2[3] = height;
-        }/*
-        if(panel2[0]<panel1[0]) {
-          int temp[] = panel1.clone();
-          panel1 = panel2.clone();
-          panel2 = temp.clone();
-        }*/
+          cargoPanel2[0] = x;
+          cargoPanel2[1] = y;
+          cargoPanel2[2] = width;
+          cargoPanel2[3] = height;
+        }
+        if(cargoPanel2[0]<cargoPanel1[0]) {
+          int temp[] = cargoPanel1.clone();
+          cargoPanel1 = cargoPanel2.clone();
+          cargoPanel2 = temp.clone();
+        }
+      }
+      if(pixyNum==1&&sig==2) {
+        if(sigNum==0) {
+          hatchPanel1[0] = x;
+          hatchPanel1[1] = y;
+          hatchPanel1[2] = width;
+          hatchPanel1[3] = height;
+        }
+        else if(sigNum==1) {
+          hatchPanel2[0] = x;
+          hatchPanel2[1] = y;
+          hatchPanel2[2] = width;
+          hatchPanel2[3] = height;
+        }
+        if(cargoPanel2[0]<cargoPanel1[0]) {
+          int temp[] = hatchPanel1.clone();
+          hatchPanel1 = hatchPanel2.clone();
+          hatchPanel2 = temp.clone();
+        }
       }
     }
   }
@@ -247,10 +281,10 @@ public class Robot extends TimedRobot {
     String s = spi.readString();
     SmartDashboard.putString("value", s);
     pixyData(s);
-    while(Math.abs(159-(panel2[0]+panel1[0])/2)>3) {
+    while(Math.abs(159-(cargoPanel2[0]+cargoPanel1[0])/2)>3) {
       //get x value from pixy
       double turn = 0;
-      if((panel2[0]+panel1[0])/2<159) {
+      if((cargoPanel2[0]+cargoPanel1[0])/2<159) {
         turn = 0.5;
       }
       else {
@@ -261,7 +295,7 @@ public class Robot extends TimedRobot {
         return;
       }
     }
-    while(Math.abs(panel2[0]-panel1[0])>25) {
+    while(Math.abs(cargoPanel2[0]-cargoPanel1[0])>25) {
       m_drive.arcadeDrive(0.5, 0);
       if(m_timer.get()-start>4.5|| m_joystick.getRawButtonPressed(8)) {
         m_drive.arcadeDrive(0, 0);
@@ -298,6 +332,80 @@ public class Robot extends TimedRobot {
         m_drive.arcadeDrive(0, 0);
         //setIntake(0)
         return;
+      }
+    }
+  }
+  private void checkLifterChanged() {
+    if(Math.abs(sliderPos-prevSlider)>0.05) {
+      lastChanged = "slider";
+    }
+    prevSlider = sliderPos;
+  }
+  private void changeLifterLevel() {
+    if(lastChanged.equals("slider")) {
+      if(lifterPos>liftLimit) {
+        lifter.set(0);
+      }
+      else if(driverInverse) { //placing balls
+        if(sliderPos<= 1 && lifterPos<homeHeight){
+          lifter.set(1);
+        }
+        else if(sliderPos <= 1 && lifterPos>homeHeight){
+          lifter.set(-1);
+          s0.set(true);
+        }
+        else if(sliderPos <= 2 && lifterPos<ballHeight1) {
+          lifter.set(1);
+          s0.set(true);
+          intake.set(1);
+        }
+        else if(sliderPos <= 2 && lifterPos>ballHeight1){
+          lifter.set(-1);
+        }
+        else if(sliderPos <= 3 && lifterPos<ballHeight2){
+          lifter.set(1);
+        }
+        else if(sliderPos <= 3 && lifterPos>ballHeight2){
+          lifter.set(-1);
+        }
+        else if(sliderPos <= 4 && lifterPos<ballHeight3){
+          lifter.set(1);
+        }
+        else if(sliderPos <= 4 && lifterPos>ballHeight3){
+          lifter.set(-1);
+        }
+        else {
+          lifter.set(0);
+        }
+      }
+      else { //placing hatches
+        if(sliderPos <= 1 && lifterPos<homeHeight){
+          lifter.set(1);
+        }
+        else if(sliderPos <= 1 && lifterPos>homeHeight){
+          lifter.set(-1);
+        }
+        else if(sliderPos <= 2 && lifterPos<panelHeight1){
+          lifter.set(1);
+        }
+        else if(sliderPos <= 2 && lifterPos>panelHeight1){
+          lifter.set(-1);
+        }
+        else if(sliderPos <= 3 && lifterPos<panelHeight2){
+          lifter.set(1);
+        }
+        else if(sliderPos <= 3 && lifterPos>panelHeight2){
+          lifter.set(-1);
+        }
+        else if(sliderPos <= 4 && lifterPos<panelHeight3){
+          lifter.set(1);
+        }
+        else if(sliderPos <= 4 && lifterPos>panelHeight3){
+          lifter.set(-1);
+        }
+        else {
+          lifter.set(0);
+        }
       }
     }
   }
