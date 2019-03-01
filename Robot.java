@@ -6,7 +6,7 @@
 /*----------------------------------------------------------------------------*/
 
 package frc.robot;
-
+//import all of the required packages
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Joystick;
@@ -23,58 +23,62 @@ import edu.wpi.first.wpilibj.Solenoid;
 //import edu.wpi.first.wpilibj.Counter;
 //import edu.wpi.first.wpilibj.Ultrasonic;
 
+//Main pogram class
 public class Robot extends TimedRobot {
-
+  //declares drivetrain type and drivetrain motors
   private WPI_TalonSRX leftDrive; //fl
   private WPI_TalonSRX leftSlave; //bl
   private WPI_TalonSRX rightDrive; //fr
   private WPI_TalonSRX rightSlave; //br
   private DifferentialDrive m_drive;
-   
+  //declares intake motor
   private WPI_TalonSRX intake;
-
+  //declares lifter motors
   private WPI_TalonSRX lifter;
   private WPI_TalonSRX lifterslave;
- 
+  //declares the m_joystick
   private Joystick m_joystick;
-
+  //declares variables for the pixycam data
   private int[] ball = new int[4];
   private int[] cargoPanel1 = new int[4];
   private int[] cargoPanel2 = new int[4];
-
   private int[] hatchPanel1 = new int[4];
   private int[] hatchPanel2 = new int[4];
-
+  //declares a variable for the centerof the pixycam
   private int center = 159;
-
+  //declares a variable lifter position
   private int lifterPos = 0;
 
- //AnalogInput analoginput = new AnalogInput(0);
-  
+  //AnalogInput analoginput = new AnalogInput(0);
+  //creates a timer variable
   private final Timer m_timer = new Timer();
+  //
   SerialPort spi;
 
  // private Compressor compressor;
-
+  //creates the solenoid
   private Solenoid s0;
   private Solenoid s1;
   private Solenoid s2;
   private Solenoid s3;
   private Solenoid s4;
   private Solenoid s5;
-
+  //creates a variable to record the previous state of the slider
   private double prevSlider = 0;
-  
+  //creates toggle variables for all of the togglable robot functons
   private boolean hatchToggle = false;
   private boolean intakeToggle = false;
   private boolean ballPusher = false;
   private boolean driverInverse = false;
- 
-  private double sliderPos = 0;
+  //creates variables for tracking all of the sliders positions
+  private double sliderHeight = 0;
+  private double sliderSpeed = 0;
+  private double lifterSpeed;
+  //creates a variable for tracking the previous lifter lever based off the slider
   private int prevSliderLv = 0;
-
+  //creates a variable to see if the slider or button was used last
   private String lastChanged = "button";
- 
+  //creates variables for all of the lifter positions
   private double homeHeight = 10;
   private double liftLimit = 300;
   private double ballHeight1 = 76;
@@ -83,23 +87,25 @@ public class Robot extends TimedRobot {
   private double panelHeight1 = 53;
   private double panelHeight2 = 124;
   private double panelHeight3 = 193;
+  private double targetHeight = 0;
+
   @Override
-  public void robotInit() {
+  public void robotInit() {//The program that runs on initialization
     leftDrive = new WPI_TalonSRX(2); //fl
-    leftSlave = new WPI_TalonSRX(3); //bl
+    leftSlave = new WPI_TalonSRX(3); //bl+
 
     rightDrive = new WPI_TalonSRX(4); //fr
     rightSlave = new WPI_TalonSRX(5); //br
-
+    //slaves the front and back motors together
     leftSlave.follow(leftDrive);
     rightSlave.follow(rightDrive);
-
+    //creates the intake
     intake = new WPI_TalonSRX(6);
-
-    lifter = new WPI_TalonSRX(7);
+    //creates the lifter and slaves the motors together
+    lifter = new WPI_TalonSRX(7); 
      lifterslave = new WPI_TalonSRX(8);
-    lifterslave.follow(lifter);
-
+    lifterslave.follow(lifter); 
+    //creates the solenoid
     s0 = new Solenoid(0);
     s1 = new Solenoid(1);
     s2 = new Solenoid(2);
@@ -107,10 +113,10 @@ public class Robot extends TimedRobot {
     s4 = new Solenoid(5);
     s5 = new Solenoid(6);
 
-    m_drive = new DifferentialDrive(rightDrive, leftDrive);
-    m_joystick = new Joystick(0);
+    m_drive = new DifferentialDrive(rightDrive, leftDrive); //Slave drive motor together
+    m_joystick = new Joystick(0); // Creates joystick leaver
     CameraServer.getInstance().startAutomaticCapture(); //bottom port
-    spi = new SerialPort(115200, Port.kUSB1); //top port
+    spi = new SerialPort(115200, Port.kUSB1); //top port, startes serial port at 115200 baud rate
     spi.enableTermination();
   }
 
@@ -118,8 +124,8 @@ public class Robot extends TimedRobot {
   public void teleopInit() {
     m_timer.reset();
     m_timer.start();
-    //encoderMotor1.setDistancePerPulse(10);
-    //encoderMotor1.reset();
+
+    lastChanged = "button";
   }
 
   @Override
@@ -133,17 +139,53 @@ public class Robot extends TimedRobot {
       driverInverse = !driverInverse;
     }
 
-    if(driverInverse) {
+    if(driverInverse) { // Switchs joystick value for inverse buttons 
       m_drive.arcadeDrive(-m_joystick.getY(), m_joystick.getZ());
     }
     else {
       m_drive.arcadeDrive(m_joystick.getY(), m_joystick.getZ());
     }
         
-    sliderPos = (-m_joystick.getRawAxis(5) + 1)*2; //range from 0-4
-    SmartDashboard.putNumber("SliderPos", sliderPos);
-    checkLifterChanged();
+    sliderHeight = (-m_joystick.getRawAxis(5) + 1)*2; //range from 0-4, gets value of slider 6
+    SmartDashboard.putNumber("SliderHeight", sliderHeight); 
 
+    sliderSpeed = (-m_joystick.getRawAxis(4) + 1)/2;
+    SmartDashboard.putNumber("SliderSpeed", sliderSpeed);
+
+    checkLifterChanged();
+    setTargetHeight();
+
+    if(lastChanged.equals("slider")&&lifterPos!=0) {
+      if(m_joystick.getRawButton(1)&&targetHeight>lifterPos) {
+        lifter.set(-0.35*sliderSpeed);
+      }
+      else if(m_joystick.getRawButton(5)&&targetHeight<lifterPos) {
+        lifter.set(0.65*sliderSpeed);
+      }
+      else if((m_joystick.getRawButtonPressed(5)&&targetHeight>lifterPos)||(m_joystick.getRawButtonPressed(1)&&targetHeight<lifterPos)){
+        lastChanged = "button";
+      }
+      else {
+        lifter.set(0);
+      }
+    }
+
+    if(lifterPos>liftLimit) {
+      lifter.set(0);
+    }
+    else if(m_joystick.getRawButton(1)) {//lifter up
+      lifter.set(-.6*sliderSpeed);
+    }
+    else if(m_joystick.getRawButton(5)) { //lift down
+      lifter.set(.4*sliderSpeed);
+    }
+    else if(lastChanged.equals("button")) { //If button is not pressed lifter will stop 
+      lifter.set(0);
+    }
+    else {
+      lifter.set(0);
+    }
+    
     if(m_joystick.getRawButton(2)) {
       intake.set(1);
     }
@@ -154,32 +196,15 @@ public class Robot extends TimedRobot {
       intake.set(0);
     }
 
-    //changeLifterLevel();
-    
-    if(lifterPos>liftLimit) {
-      lifter.set(0);
-    }
-    else if(m_joystick.getRawButton(1)) {//lifter down
-      lifter.set(-0.35);
-      lastChanged = "button";
-    }
-    else if(m_joystick.getRawButton(5)) { //lift UP
-      lifter.set(0.65);
-      lastChanged = "button";
-    }
-    else if(lastChanged.equals("button")) {
-      lifter.set(0);
-    }
-    
-    if(m_joystick.getRawButtonPressed(3)){
+    if(m_joystick.getRawButtonPressed(3)){ 
       hatchToggle = !hatchToggle;
-      if(hatchToggle) {
-        s1.set(true);
+      if(hatchToggle) { //pistions is extended, ejecting hatch panel
+        
         s2.set(true);
         s3.set(true);
       }
-      else {
-        s1.set(false);
+      else {  //pistions is retracted
+      
         s2.set(false);
         s3.set(false);
       }
@@ -187,21 +212,21 @@ public class Robot extends TimedRobot {
     
     if(m_joystick.getRawButtonPressed(8)){
       intakeToggle = !intakeToggle;
-      if(intakeToggle) {
+      if(intakeToggle) { //intake is put down
         s0.set(true);  
       }
-      else {
+      else { //intake is retracted
         s0.set(false);    
       }
     }
 
     if(m_joystick.getRawButtonPressed(6)){
       ballPusher = !ballPusher;
-      if(ballPusher) {
-        s4.set(true);  
+      if(ballPusher) { //pistion is extended, pushing ball out
+        s1.set(true);  
       }
-      else {
-        s4.set(false);    
+      else { //pistion is retracted
+        s1.set(false);    
       }
     }
     if(driverInverse)
@@ -209,6 +234,7 @@ public class Robot extends TimedRobot {
     else  
       SmartDashboard.putString("Mode", "Hatch");
   }
+  
 
   public void pixyData(String s){
     SmartDashboard.putNumber("length", s.length());
@@ -219,10 +245,9 @@ public class Robot extends TimedRobot {
     }
     else if(!s.isEmpty() && s.length()==23 && s.charAt(0)=='P') {
       SmartDashboard.putString("parsed", s);
-      int sig = Character.getNumericValue(s.charAt(3));
-
       //format "P1S0X000Y000W000H000N0\n"
-      //        0123456789012345678901
+      //0123456789012345678901
+      int sig = Character.getNumericValue(s.charAt(3));
       int pixyNum = Integer.valueOf(s.substring(1,2));
       int x = Integer.valueOf(s.substring(5,8));
       int y = Integer.valueOf(s.substring(9,12));
@@ -276,7 +301,7 @@ public class Robot extends TimedRobot {
       }
     }
   }
-  public void hatchPlace() {
+ /* public void hatchPlace() {
     double start = m_timer.get();
     String s = spi.readString();
     SmartDashboard.putString("value", s);
@@ -303,8 +328,7 @@ public class Robot extends TimedRobot {
       }
     }
     //place hatch
-  }
-  
+  }  
   public void collectBall() {
     double start = m_timer.get();
     String s = spi.readString();
@@ -334,78 +358,114 @@ public class Robot extends TimedRobot {
         return;
       }
     }
-  }
+  } */
+
   private void checkLifterChanged() {
-    if(Math.abs(sliderPos-prevSlider)>0.05) {
+    if(Math.abs(sliderHeight-prevSlider)>0.05) {
       lastChanged = "slider";
     }
-    prevSlider = sliderPos;
-  }
+    prevSlider = sliderHeight;
+  }  
+
   private void changeLifterLevel() {
     if(lastChanged.equals("slider")) {
       if(lifterPos>liftLimit) {
         lifter.set(0);
       }
       else if(driverInverse) { //placing balls
-        if(sliderPos<= 1 && lifterPos<homeHeight){
-          lifter.set(1);
-        }
-        else if(sliderPos <= 1 && lifterPos>homeHeight){
-          lifter.set(-1);
+        if(sliderHeight<= 1 && lifterPos<homeHeight){
+          lifter.set(0.65*sliderSpeed);
           s0.set(true);
         }
-        else if(sliderPos <= 2 && lifterPos<ballHeight1) {
-          lifter.set(1);
+        else if(sliderHeight <= 1 && lifterPos>homeHeight){
+          lifter.set(-0.35);
           s0.set(true);
-          intake.set(1);
         }
-        else if(sliderPos <= 2 && lifterPos>ballHeight1){
-          lifter.set(-1);
+        else if(sliderHeight <= 2 && lifterPos<ballHeight1) {
+          lifter.set(0.65*sliderSpeed);
+          s0.set(true);
+          intake.set(0.65);
         }
-        else if(sliderPos <= 3 && lifterPos<ballHeight2){
-          lifter.set(1);
+        else if(sliderHeight <= 2 && lifterPos>ballHeight1){
+          lifter.set(-0.35*sliderSpeed); 
         }
-        else if(sliderPos <= 3 && lifterPos>ballHeight2){
-          lifter.set(-1);
+        else if(sliderHeight <= 3 && lifterPos<ballHeight2){
+          lifter.set(0.65*sliderSpeed);  
         }
-        else if(sliderPos <= 4 && lifterPos<ballHeight3){
-          lifter.set(1);
+        else if(sliderHeight <= 3 && lifterPos>ballHeight2){
+          lifter.set(-0.35*sliderSpeed);         
         }
-        else if(sliderPos <= 4 && lifterPos>ballHeight3){
-          lifter.set(-1);
+        else if(sliderHeight <= 4 && lifterPos<ballHeight3){
+          lifter.set(0.65*sliderSpeed);          
+        }
+        else if(sliderHeight <= 4 && lifterPos>ballHeight3){
+          lifter.set(-0.35*sliderSpeed);  
         }
         else {
           lifter.set(0);
         }
       }
       else { //placing hatches
-        if(sliderPos <= 1 && lifterPos<homeHeight){
-          lifter.set(1);
+        if(sliderHeight <= 1 && lifterPos<homeHeight){
+          lifter.set(0.65*sliderSpeed);
+          s0.set(true);
         }
-        else if(sliderPos <= 1 && lifterPos>homeHeight){
-          lifter.set(-1);
+        else if(sliderHeight <= 1 && lifterPos>homeHeight){
+          lifter.set(-0.35*sliderSpeed);
+          s0.set(true);
         }
-        else if(sliderPos <= 2 && lifterPos<panelHeight1){
-          lifter.set(1);
+        else if(sliderHeight <= 2 && lifterPos<panelHeight1){
+          lifter.set(0.65*sliderSpeed);
+          s0.set(true);
         }
-        else if(sliderPos <= 2 && lifterPos>panelHeight1){
-          lifter.set(-1);
+        else if(sliderHeight <= 2 && lifterPos>panelHeight1){
+          lifter.set(-0.35*sliderSpeed);
         }
-        else if(sliderPos <= 3 && lifterPos<panelHeight2){
-          lifter.set(1);
+        else if(sliderHeight <= 3 && lifterPos<panelHeight2){
+          lifter.set(0.65*sliderSpeed);
         }
-        else if(sliderPos <= 3 && lifterPos>panelHeight2){
-          lifter.set(-1);
+        else if(sliderHeight <= 3 && lifterPos>panelHeight2){
+          lifter.set(-0.35*sliderSpeed);
         }
-        else if(sliderPos <= 4 && lifterPos<panelHeight3){
-          lifter.set(1);
+        else if(sliderHeight <= 4 && lifterPos<panelHeight3){
+          lifter.set(0.65*sliderSpeed);
         }
-        else if(sliderPos <= 4 && lifterPos>panelHeight3){
-          lifter.set(-1);
+        else if(sliderHeight <= 4 && lifterPos>panelHeight3){
+          lifter.set(-0.35*sliderSpeed);
         }
         else {
           lifter.set(0);
-        }
+         }
+      }
+    }
+  }
+  private void setTargetHeight() {
+    if(driverInverse) { //placing balls
+      if(sliderHeight <= 1){
+        targetHeight = homeHeight;
+      }
+      else if(sliderHeight <= 2){
+        targetHeight = ballHeight1;
+      }
+      else if(sliderHeight <= 3){
+        targetHeight = ballHeight2;
+      }
+      else if(sliderHeight <= 4){
+        targetHeight = ballHeight3;
+      }
+    }
+    else { //placing hatches
+      if(sliderHeight <= 1){
+        targetHeight = homeHeight;
+      }
+      else if(sliderHeight <= 2){
+        targetHeight = panelHeight1;
+      }
+      else if(sliderHeight <= 3){
+        targetHeight = panelHeight2;
+      }
+      else if(sliderHeight <= 4){
+        targetHeight = panelHeight2;
       }
     }
   }
