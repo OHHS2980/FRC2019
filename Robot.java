@@ -31,6 +31,10 @@ public class Robot extends TimedRobot {
   private WPI_TalonSRX rightDrive; //fr
   private WPI_TalonSRX rightSlave; //br
   private DifferentialDrive m_drive;
+
+ // private WPI_TalonSRX
+ // private WPI_TalonSRX
+
   //declares intake motor
   private WPI_TalonSRX intake;
   //declares lifter motors
@@ -116,8 +120,30 @@ public class Robot extends TimedRobot {
     m_drive = new DifferentialDrive(rightDrive, leftDrive); //Slave drive motor together
     m_joystick = new Joystick(0); // Creates joystick leaver
     CameraServer.getInstance().startAutomaticCapture(); //bottom port
-    spi = new SerialPort(115200, Port.kUSB1); //top port, startes serial port at 115200 baud rate
-    spi.enableTermination();
+  //  spi = new SerialPort(115200, Port.kUSB1); //top port, startes serial port at 115200 baud rate
+  //  spi.enableTermination();
+  }
+
+  @Override
+  public void autonomousInit() {
+    m_timer.reset();
+    m_timer.start();
+
+    lastChanged = "button";
+    intakeToggle = false;
+    hatchToggle = false;
+    ballPusher = false;
+    s0.set(false);
+    s1.set(false);
+    s2.set(false);
+    s3.set(false);
+    s4.set(false);
+    s5.set(false);
+  }
+
+  @Override
+  public void autonomousPeriodic() {
+    teleopPeriodic();
   }
 
   @Override
@@ -130,10 +156,10 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
-    String s = spi.readString();
-    pixyData(s);
-    if(!s.isEmpty())
-      SmartDashboard.putString("value", s);
+    //String s = spi.readString();
+    //pixyData(s);
+    //if(!s.isEmpty())
+    //  SmartDashboard.putString("value", s);
     
     if(m_joystick.getRawButtonPressed(4)){
       driverInverse = !driverInverse;
@@ -154,7 +180,7 @@ public class Robot extends TimedRobot {
 
     checkLifterChanged();
     setTargetHeight();
-
+/*
     if(lastChanged.equals("slider")&&lifterPos!=0) {
       if(m_joystick.getRawButton(1)&&targetHeight>lifterPos) {
         lifter.set(-0.35*sliderSpeed);
@@ -169,15 +195,15 @@ public class Robot extends TimedRobot {
         lifter.set(0);
       }
     }
-
-    if(lifterPos>liftLimit) {
+*/
+    /*if(lifterPos>liftLimit) {
       lifter.set(0);
-    }
-    else if(m_joystick.getRawButton(1)) {//lifter up
-      lifter.set(-.6*sliderSpeed);
+    }*/
+    if(m_joystick.getRawButton(1)) {//lifter up
+      lifter.set(-.7*sliderSpeed);
     }
     else if(m_joystick.getRawButton(5)) { //lift down
-      lifter.set(.4*sliderSpeed);
+      lifter.set(.45*sliderSpeed);
     }
     else if(lastChanged.equals("button")) { //If button is not pressed lifter will stop 
       lifter.set(0);
